@@ -1,0 +1,8 @@
+{
+    "texts": {
+        "old_text": "new_text"
+    },
+    "links": {
+        "old_link": "new_link"
+    }
+}
