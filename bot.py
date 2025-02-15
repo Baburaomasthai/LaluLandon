@@ -12,9 +12,21 @@ logger = logging.getLogger(__name__)
 API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH", "")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
-MAIN_ADMIN_ID = int(os.getenv("MAIN_ADMIN_ID", "0"))
-SOURCE_CHAT_ID = -1001927755960############  # Replace with actual source chat ID
-TARGET_CHAT_ID = -1002369229203############  # Replace with actual target chat ID
+
+try:
+    MAIN_ADMIN_ID = int(os.getenv("MAIN_ADMIN_ID", "0"))
+except ValueError:
+    logger.error("❌ Invalid MAIN_ADMIN_ID. Set a valid Telegram user ID.")
+    exit(1)
+
+ADMIN_IDS = list(map(int, os.getenv("ADMIN_IDS", "").split(","))) if os.getenv("ADMIN_IDS") else [MAIN_ADMIN_ID]
+
+try:
+    SOURCE_CHAT_ID = int(os.getenv("SOURCE_CHAT_ID", "0"))
+    TARGET_CHAT_ID = int(os.getenv("TARGET_CHAT_ID", "0"))
+except ValueError:
+    logger.error("❌ Invalid SOURCE_CHAT_ID or TARGET_CHAT_ID. Set valid chat IDs.")
+    exit(1)
 
 if not all([API_ID, API_HASH, BOT_TOKEN, MAIN_ADMIN_ID, SOURCE_CHAT_ID, TARGET_CHAT_ID]):
     logger.error("❌ Missing environment variables. Exiting...")
@@ -26,17 +38,14 @@ BLOCKED_FILE = "blocked.json"
 
 # Ensure essential files exist
 def ensure_files():
-    if not os.path.exists(REPLACEMENT_FILE):
-        with open(REPLACEMENT_FILE, "w") as f:
-            json.dump({"texts": {}, "links": {}}, f)
-
-    if not os.path.exists(BLOCKED_FILE):
-        with open(BLOCKED_FILE, "w") as f:
-            json.dump({"blocked_messages": []}, f)
+    for file, default_content in [(REPLACEMENT_FILE, {"texts": {}, "links": {}}), (BLOCKED_FILE, {"blocked_messages": []})]:
+        if not os.path.exists(file):
+            with open(file, "w") as f:
+                json.dump(default_content, f)
 
 ensure_files()
 
-# Load JSON data
+# Load and save JSON data
 def load_json(file, default):
     try:
         with open(file, "r") as f:
@@ -63,10 +72,6 @@ def save_blocked(data):
 # Initialize Pyrogram bot
 app = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# Check if user is admin
-async def is_admin(user_id):
-    return user_id == MAIN_ADMIN_ID
-
 # **Forward & Replace Messages**
 @app.on_message(filters.chat(SOURCE_CHAT_ID))
 async def forward_and_replace(client, message: Message):
@@ -80,12 +85,14 @@ async def forward_and_replace(client, message: Message):
 
     for old, new in {**replacements["texts"], **replacements["links"]}.items():
         message_text = message_text.replace(old, new)
-
-    await client.send_message(TARGET_CHAT_ID, message_text) if message.text else \
-        await client.copy_message(TARGET_CHAT_ID, SOURCE_CHAT_ID, message.message_id, caption=message_text)
+    
+    if message_text.strip():
+        await client.send_message(TARGET_CHAT_ID, message_text)
+    else:
+        await client.copy_message(TARGET_CHAT_ID, SOURCE_CHAT_ID, message.message_id)
 
 # **Admin Commands**
-@app.on_message(filters.command("addreplace") & filters.user(MAIN_ADMIN_ID))
+@app.on_message(filters.command("addreplace") & filters.user(ADMIN_IDS))
 async def add_replace(client, message: Message):
     try:
         _, old, new = message.text.split(" ", 2)
@@ -96,7 +103,7 @@ async def add_replace(client, message: Message):
     except:
         await message.reply_text("⚠️ Usage: `/addreplace old_text new_text`")
 
-@app.on_message(filters.command("block") & filters.user(MAIN_ADMIN_ID))
+@app.on_message(filters.command("block") & filters.user(ADMIN_IDS))
 async def block_message(client, message: Message):
     try:
         message_id = int(message.text.split(" ", 1)[1])
