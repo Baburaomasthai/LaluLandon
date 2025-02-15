@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH", "")
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+SESSION_STRING = os.getenv("SESSION_STRING", "")
 
 try:
     MAIN_ADMIN_ID = int(os.getenv("MAIN_ADMIN_ID", "0"))
@@ -28,7 +28,7 @@ except ValueError:
     logger.error("❌ Invalid SOURCE_CHAT_ID or TARGET_CHAT_ID. Set valid chat IDs.")
     exit(1)
 
-if not all([API_ID, API_HASH, BOT_TOKEN, MAIN_ADMIN_ID, SOURCE_CHAT_ID, TARGET_CHAT_ID]):
+if not all([API_ID, API_HASH, SESSION_STRING, MAIN_ADMIN_ID, SOURCE_CHAT_ID, TARGET_CHAT_ID]):
     logger.error("❌ Missing environment variables. Exiting...")
     exit(1)
 
@@ -69,8 +69,8 @@ def load_blocked():
 def save_blocked(data):
     save_json(BLOCKED_FILE, data)
 
-# Initialize Pyrogram bot
-app = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# Initialize Pyrogram user client (instead of bot client)
+app = Client("userbot", session_string=SESSION_STRING, api_id=API_ID, api_hash=API_HASH)
 
 # **Forward & Replace Messages**
 @app.on_message(filters.chat(SOURCE_CHAT_ID))
